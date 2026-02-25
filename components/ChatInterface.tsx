@@ -14,12 +14,16 @@ import TokenStats from './TokenStats';
 import FileUpload from './FileUpload';
 import LLMSelector from './LLMSelector';
 
+interface ChatInterfaceProps {
+  onStartMoodboard?: () => void;
+}
+
 interface LocalFile {
   file: File;
   preview: string;
 }
 
-export default function ChatInterface() {
+export default function ChatInterface({ onStartMoodboard }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +54,21 @@ export default function ChatInterface() {
     }));
     setUploadedFiles((prev) => [...prev, ...newFiles]);
     setShowFileUpload(false);
+  };
+
+  const sanitizeContent = (raw: string): string => {
+    if (!raw) return '';
+    let text = raw;
+    // Quitar ** y otros restos de markdown básicos
+    text = text.replace(/\*\*/g, '');
+    // Colapsar saltos de línea excesivos
+    text = text.replace(/\n{3,}/g, '\n\n');
+    // Limitar longitud máxima para que no sean respuestas eternas
+    const maxChars = 900;
+    if (text.length > maxChars) {
+      text = text.slice(0, maxChars) + '…';
+    }
+    return text.trim();
   };
 
   const removeFile = (index: number) => {
@@ -113,12 +132,13 @@ export default function ChatInterface() {
 
       const data = await response.json();
       const { content, tokensInput = 0, tokensOutput = 0 } = data;
+      const safeContent = sanitizeContent(content || '');
 
       setMessages((prev) => {
         const next = [...prev];
         const last = next[next.length - 1];
         if (last.role === 'assistant') {
-          last.content = content || '';
+          last.content = safeContent;
         }
         return next;
       });
@@ -186,6 +206,14 @@ export default function ChatInterface() {
                 moodboards, generar ideas y traducir inspiración en diseños
                 concretos.
               </p>
+              {onStartMoodboard && (
+                <button
+                  onClick={onStartMoodboard}
+                  className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] transition-colors text-sm font-medium"
+                >
+                  Empezar con un moodboard
+                </button>
+              )}
             </div>
           )}
 
