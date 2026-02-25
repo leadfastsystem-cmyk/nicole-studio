@@ -40,6 +40,7 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
   } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'piezas' | 'chat'>('piezas');
+  const [chatContext, setChatContext] = useState('');
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -88,7 +89,10 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
       const res = await fetch('/api/moodboard/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: dataUrls }),
+        body: JSON.stringify({
+          images: dataUrls,
+          context: chatContext.trim() || undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -261,12 +265,15 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
                 {needMoreInfo.whatISee}
               </p>
               {needMoreInfo.questions.length > 0 && (
-                <ul className="list-disc list-inside text-sm text-[var(--foreground-muted)] space-y-1">
+                <ul className="list-disc list-inside text-sm text-[var(--foreground-muted)] space-y-1 mb-3">
                   {needMoreInfo.questions.map((q, i) => (
                     <li key={i}>{q}</li>
                   ))}
                 </ul>
               )}
+              <p className="text-xs text-[var(--foreground-muted)] border-t border-amber-200 pt-3">
+                Responde en la pestaña &quot;Chat con Nicole&quot; y vuelve a pulsar &quot;Generar piezas&quot;.
+              </p>
             </div>
           )}
         </div>
@@ -321,6 +328,11 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
             {activeTab === 'chat' && (
               <ChatPanel
                 onCostChange={(delta) => setTotalCost((c) => c + delta)}
+                onUserMessage={(text) =>
+                  setChatContext((prev) =>
+                    prev ? `${prev}\n\n${text}` : text
+                  )
+                }
               />
             )}
           </div>

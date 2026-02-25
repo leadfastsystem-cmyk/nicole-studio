@@ -8,6 +8,7 @@ import MessageBubble from './MessageBubble';
 
 interface ChatPanelProps {
   onCostChange?: (delta: number) => void;
+  onUserMessage?: (text: string) => void;
 }
 
 function sanitizeContent(raw: string): string {
@@ -18,7 +19,7 @@ function sanitizeContent(raw: string): string {
   return text.trim();
 }
 
-export default function ChatPanel({ onCostChange }: ChatPanelProps) {
+export default function ChatPanel({ onCostChange, onUserMessage }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +48,7 @@ export default function ChatPanel({ onCostChange }: ChatPanelProps) {
       createdAt: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
+    onUserMessage?.(userMessage.content);
     setInput('');
     setIsLoading(true);
 

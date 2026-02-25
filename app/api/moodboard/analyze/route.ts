@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-const MOODBOARD_PROMPT = `Eres Nicole, asistente de diseño de joyería para Majorica (perlas y joyería elegante).
+const MOODBOARD_BASE = `Eres Nicole, asistente de diseño de joyería para Majorica (perlas y joyería elegante).
 
 Analiza las imágenes del moodboard que te envío y responde ÚNICAMENTE con un JSON válido, sin texto antes ni después, con esta estructura exacta:
 
@@ -30,6 +30,19 @@ Reglas:
 }
 - Responde solo con el JSON, nada más.`;
 
+function buildPrompt(context?: string): string {
+  if (!context || !context.trim()) return MOODBOARD_BASE;
+  return `CONTEXTO ADICIONAL proporcionado por la diseñadora (usa esta información para afinar el ADN y las piezas):
+
+"""
+${context.trim()}
+"""
+
+---
+
+${MOODBOARD_BASE}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!OPENAI_API_KEY) {
@@ -39,8 +52,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = (await req.json()) as { images?: string[] };
+    const body = (await req.json()) as {
+      images?: string[];
+      context?: string;
+    };
     const images = body.images ?? [];
+    const context = typeof body.context === 'string' ? body.context : undefined;
 
     if (images.length === 0) {
       return NextResponse.json(
@@ -56,8 +73,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const prompt = buildPrompt(context);
     const content: { type: string; text?: string; image_url?: { url: string } }[] = [
-      { type: 'text', text: MOODBOARD_PROMPT },
+      { type: 'text', text: prompt },
     ];
 
     for (const dataUrl of images) {
