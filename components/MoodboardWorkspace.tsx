@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Loader2, ImagePlus, ArrowLeft, Sparkles } from 'lucide-react';
+import { Loader2, ImagePlus, ArrowLeft, Sparkles, ImageIcon } from 'lucide-react';
 import TokenStats from './TokenStats';
 import ChatPanel from './ChatPanel';
 
@@ -41,6 +41,8 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState<'piezas' | 'chat'>('piezas');
   const [chatContext, setChatContext] = useState('');
+  const [pieceImages, setPieceImages] = useState<Record<number, { url: string; cost: number }>>({});
+  const [loadingImage, setLoadingImage] = useState<Record<number, boolean>>({});
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -81,6 +83,7 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
     setNeedMoreInfo(null);
     setAdn(null);
     setPieces([]);
+    setPieceImages({});
 
     try {
       const dataUrls = await Promise.all(
@@ -121,6 +124,36 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
       });
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const generateImageForPiece = async (index: number) => {
+    const text = pieces[index];
+    if (!text) return;
+    setLoadingImage((prev) => ({ ...prev, [index]: true }));
+    try {
+      const res = await fetch('/api/moodboard/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ piece: text }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al generar');
+      }
+      const data = await res.json();
+      setPieceImages((prev) => ({ ...prev, [index]: { url: data.imageUrl, cost: data.costUsd } }));
+      setTotalCost((c) => c + (data.costUsd || 0));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingImage((prev) => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const generateAllImages = async () => {
+    for (let i = 0; i < pieces.length; i++) {
+      if (!pieceImages[i]) await generateImageForPiece(i);
     }
   };
 
@@ -312,14 +345,55 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
                     moodboard&quot; para ver propuestas.
                   </p>
                 )}
+                {pieces.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={generateAllImages}
+                    disabled={Object.keys(pieceImages).length >= pieces.length || Object.values(loadingImage).some(Boolean)}
+                    className="mb-4 w-full py-2 rounded-lg border border-[var(--border)] text-sm text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] disabled:opacity-50"
+                  >
+                    Generar imágenes de todas las piezas
+                  </button>
+                )}
                 {pieces.map((piece, i) => (
                   <div
                     key={i}
                     className="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)]"
                   >
-                    <p className="text-sm text-[var(--foreground)] leading-relaxed">
+                    <p className="text-sm text-[var(--foreground)] leading-relaxed mb-3">
                       {piece}
                     </p>
+                    {pieceImages[i] ? (
+                      <div className="space-y-2">
+                        <img
+                          src={pieceImages[i].url}
+                          alt={`Pieza ${i + 1}`}
+                          className="w-full max-w-xs rounded-lg border border-[var(--border)] object-cover"
+                        />
+                        <p className="text-xs text-[var(--foreground-muted)]">
+                          Coste imagen: ${pieceImages[i].cost.toFixed(4)}
+                        </p>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => generateImageForPiece(i)}
+                        disabled={loadingImage[i]}
+                        className="flex items-center gap-2 py-2 px-3 rounded-lg border border-[var(--border)] text-sm text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] disabled:opacity-50"
+                      >
+                        {loadingImage[i] ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Generando...
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="w-4 h-4" />
+                            Generar imagen (~$0.04)
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
