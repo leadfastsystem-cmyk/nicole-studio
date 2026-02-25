@@ -16,6 +16,8 @@ import LLMSelector from './LLMSelector';
 
 interface ChatInterfaceProps {
   onStartMoodboard?: () => void;
+  totalCost: number;
+  onAddCost: (delta: number) => void;
 }
 
 interface LocalFile {
@@ -23,14 +25,13 @@ interface LocalFile {
   preview: string;
 }
 
-export default function ChatInterface({ onStartMoodboard }: ChatInterfaceProps) {
+export default function ChatInterface({ onStartMoodboard, totalCost, onAddCost }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<LLMModel>(DEFAULT_MODEL);
   const [uploadedFiles, setUploadedFiles] = useState<LocalFile[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [totalCost, setTotalCost] = useState(0);
   const [showFileUpload, setShowFileUpload] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -147,7 +148,7 @@ export default function ChatInterface({ onStartMoodboard }: ChatInterfaceProps) 
         (tokensInput * selectedModel.costPer1kInput +
           tokensOutput * selectedModel.costPer1kOutput) /
         1000;
-      setTotalCost((prev) => prev + cost);
+      onAddCost(cost);
       setMessages((prev) => {
         const next = [...prev];
         const last = next[next.length - 1];

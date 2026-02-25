@@ -18,6 +18,8 @@ interface AdnResult {
 
 interface MoodboardWorkspaceProps {
   onBack: () => void;
+  totalCost: number;
+  onAddCost: (delta: number) => void;
 }
 
 const REFINE_CHIPS = [
@@ -38,9 +40,8 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) {
+export default function MoodboardWorkspace({ onBack, totalCost, onAddCost }: MoodboardWorkspaceProps) {
   const [images, setImages] = useState<MoodboardImage[]>([]);
-  const [totalCost, setTotalCost] = useState(0);
   const [adn, setAdn] = useState<AdnResult | null>(null);
   const [pieces, setPieces] = useState<string[]>([]);
   const [needMoreInfo, setNeedMoreInfo] = useState<{
@@ -160,7 +161,7 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
       }
       const data = await res.json();
       setPieceImages((prev) => ({ ...prev, [index]: { url: data.imageUrl, cost: data.costUsd } }));
-      setTotalCost((c) => c + (data.costUsd || 0));
+      onAddCost(data.costUsd || 0);
     } catch (err) {
       console.error(err);
     } finally {
@@ -505,7 +506,7 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
 
             {activeTab === 'chat' && (
               <ChatPanel
-                onCostChange={(delta) => setTotalCost((c) => c + delta)}
+                onCostChange={onAddCost}
                 onUserMessage={(text) =>
                   setChatContext((prev) =>
                     prev ? `${prev}\n\n${text}` : text
