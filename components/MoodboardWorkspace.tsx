@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { Loader2, ImagePlus, ArrowLeft, Sparkles, ImageIcon } from 'lucide-react';
+import { Loader2, ImagePlus, ArrowLeft, Sparkles, ImageIcon, RefreshCw } from 'lucide-react';
 import TokenStats from './TokenStats';
 import ChatPanel from './ChatPanel';
 
@@ -19,6 +19,15 @@ interface AdnResult {
 interface MoodboardWorkspaceProps {
   onBack: () => void;
 }
+
+const REFINE_CHIPS = [
+  'Más minimal',
+  'Añadir perla',
+  'Plata en vez de oro',
+  'Dorado en vez de plata',
+  'Fondo gris',
+  'Más escultórico',
+];
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,6 +52,7 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
   const [chatContext, setChatContext] = useState('');
   const [pieceImages, setPieceImages] = useState<Record<number, { url: string; cost: number }>>({});
   const [loadingImage, setLoadingImage] = useState<Record<number, boolean>>({});
+  const [pieceRefinements, setPieceRefinements] = useState<Record<number, string>>({});
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -84,6 +94,7 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
     setAdn(null);
     setPieces([]);
     setPieceImages({});
+    setPieceRefinements({});
 
     try {
       const dataUrls = await Promise.all(
@@ -127,15 +138,21 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
     }
   };
 
+  const getPromptForPiece = (index: number) => {
+    const base = pieces[index] || '';
+    const ref = pieceRefinements[index]?.trim();
+    return ref ? `${base}. Refinamiento: ${ref}` : base;
+  };
+
   const generateImageForPiece = async (index: number) => {
-    const text = pieces[index];
-    if (!text) return;
+    const prompt = getPromptForPiece(index);
+    if (!prompt.trim()) return;
     setLoadingImage((prev) => ({ ...prev, [index]: true }));
     try {
       const res = await fetch('/api/moodboard/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ piece: text }),
+        body: JSON.stringify({ piece: prompt }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -155,6 +172,22 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
     for (let i = 0; i < pieces.length; i++) {
       if (!pieceImages[i]) await generateImageForPiece(i);
     }
+  };
+
+  const updatePiece = (index: number, value: string) => {
+    setPieces((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const addRefinementChip = (index: number, chip: string) => {
+    setPieceRefinements((prev) => {
+      const current = prev[index] || '';
+      const added = current ? `${current}, ${chip}` : chip;
+      return { ...prev, [index]: added };
+    });
   };
 
   return (
@@ -360,11 +393,18 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
                     key={i}
                     className="p-4 rounded-xl border border-[var(--border)] bg-[var(--background)]"
                   >
-                    <p className="text-sm text-[var(--foreground)] leading-relaxed mb-3">
-                      {piece}
-                    </p>
+                    <label className="block text-xs font-medium text-[var(--foreground-muted)] mb-1.5">
+                      Descripción (editable)
+                    </label>
+                    <textarea
+                      value={piece}
+                      onChange={(e) => updatePiece(i, e.target.value)}
+                      className="w-full text-sm text-[var(--foreground)] leading-relaxed p-2 rounded-lg border border-[var(--border)] bg-white resize-none min-h-[60px] mb-3"
+                      placeholder="Describe la pieza..."
+                      rows={3}
+                    />
                     {pieceImages[i] ? (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <img
                           src={pieceImages[i].url}
                           alt={`Pieza ${i + 1}`}
@@ -373,26 +413,90 @@ export default function MoodboardWorkspace({ onBack }: MoodboardWorkspaceProps) 
                         <p className="text-xs text-[var(--foreground-muted)]">
                           Coste imagen: ${pieceImages[i].cost.toFixed(4)}
                         </p>
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--foreground-muted)] mb-1.5">
+                            ¿Qué quieres cambiar?
+                          </label>
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {REFINE_CHIPS.map((chip) => (
+                              <button
+                                key={chip}
+                                type="button"
+                                onClick={() => addRefinementChip(i, chip)}
+                                className="px-2 py-1 rounded-full text-xs border border-[var(--border)] bg-white text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]"
+                              >
+                                {chip}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={pieceRefinements[i] || ''}
+                              onChange={(e) =>
+                                setPieceRefinements((p) => ({ ...p, [i]: e.target.value }))
+                              }
+                              placeholder="O escribe tu refinamiento..."
+                              className="flex-1 text-sm px-2 py-1.5 rounded-lg border border-[var(--border)] bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => generateImageForPiece(i)}
+                              disabled={loadingImage[i]}
+                              className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-[var(--accent)] text-sm text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white disabled:opacity-50"
+                            >
+                              {loadingImage[i] ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-4 h-4" />
+                              )}
+                              Regenerar (~$0.04)
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => generateImageForPiece(i)}
-                        disabled={loadingImage[i]}
-                        className="flex items-center gap-2 py-2 px-3 rounded-lg border border-[var(--border)] text-sm text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] disabled:opacity-50"
-                      >
-                        {loadingImage[i] ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Generando...
-                          </>
-                        ) : (
-                          <>
-                            <ImageIcon className="w-4 h-4" />
-                            Generar imagen (~$0.04)
-                          </>
-                        )}
-                      </button>
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {REFINE_CHIPS.map((chip) => (
+                            <button
+                              key={chip}
+                              type="button"
+                              onClick={() => addRefinementChip(i, chip)}
+                              className="px-2 py-1 rounded-full text-xs border border-[var(--border)] bg-white text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]"
+                            >
+                              {chip}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          type="text"
+                          value={pieceRefinements[i] || ''}
+                          onChange={(e) =>
+                            setPieceRefinements((p) => ({ ...p, [i]: e.target.value }))
+                          }
+                          placeholder="Añade detalles antes de generar..."
+                          className="w-full text-sm px-2 py-1.5 rounded-lg border border-[var(--border)] bg-white mb-2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => generateImageForPiece(i)}
+                          disabled={loadingImage[i]}
+                          className="flex items-center gap-2 py-2 px-3 rounded-lg border border-[var(--border)] text-sm text-[var(--foreground-muted)] hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] disabled:opacity-50"
+                        >
+                          {loadingImage[i] ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Generando...
+                            </>
+                          ) : (
+                            <>
+                              <ImageIcon className="w-4 h-4" />
+                              Generar imagen (~$0.04)
+                            </>
+                          )}
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
